@@ -19,6 +19,9 @@ struct win32_back_buffer {
 
 global_variable bool IsRunning = false;
 global_variable win32_back_buffer globalBackBuffer;
+global_variable uint8_t globalRed = 0;
+global_variable uint8_t globalGreen = 85;
+global_variable uint8_t globalBlue = 160;
 
 internal void Win32FillBackBuffer(uint8_t red, uint8_t green, uint8_t blue) {
     uint8_t* row = (uint8_t*)globalBackBuffer.memory;
@@ -102,10 +105,10 @@ LRESULT Win32MainWindowProc(
             case WM_PAINT:{
                 PAINTSTRUCT p;
                 HDC dc = BeginPaint(hwnd, &p);
-                win32_dimensions windowDim = Win32GetDimensions(hwnd);
-                Win32RebuildBackBuffer(hwnd, windowDim.width, windowDim.height);
-                Win32FillBackBuffer(0, 85, 160);
-                Win32DisplayBuffer(dc, windowDim.width, windowDim.height, globalBackBuffer);
+                int width = p.rcPaint.right - p.rcPaint.left;
+                int height = p.rcPaint.bottom - p.rcPaint.top;
+                Win32FillBackBuffer(globalRed, globalGreen, globalBlue);
+                Win32DisplayBuffer(dc, width, height, globalBackBuffer);
                 EndPaint(hwnd, &p);
             } break;
         
@@ -147,11 +150,11 @@ int WinMain(
             if (window) {
                 IsRunning = true;
                 HDC dc = GetDC(window);
-                uint8_t red = 0;
-                uint8_t green = 85;
-                uint8_t blue = 160;
 
                 int offset = 0;
+
+                Win32RebuildBackBuffer(window, 1280, 720);
+
                 while(IsRunning) {
                     MSG msg;
                     while(PeekMessage(&msg, window, 0, 0, PM_REMOVE)) {
@@ -161,8 +164,7 @@ int WinMain(
                         TranslateMessage(&msg);
                         DispatchMessage(&msg);
                     }
-                    Win32RebuildBackBuffer(window, 1280, 720);
-                    Win32FillBackBuffer((red + offset), (green + offset), (blue + offset));
+                    Win32FillBackBuffer((globalRed + offset), (globalGreen + offset), (globalBlue + offset));
                     win32_dimensions windowDim = Win32GetDimensions(window);
                     Win32DisplayBuffer(dc, windowDim.width, windowDim.height, globalBackBuffer);
 

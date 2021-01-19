@@ -1,3 +1,3 @@
 @echo off
 
-devenv y:\hmbuild\main.exe
+devenv ..\..\hmbuild\main.exe
