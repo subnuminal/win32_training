@@ -1,8 +1,27 @@
 #include <Windows.h>
 #include <stdint.h>
+#include <Xinput.h>
 
 #define global_variable static
 #define internal static
+
+#define bool32 int32_t
+
+#define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE *pState)
+typedef X_INPUT_GET_STATE(x_input_get_state);
+X_INPUT_GET_STATE(XInputGetStateStub) {
+    return ERROR_DEVICE_NOT_CONNECTED;
+}
+x_input_get_state* XInputGetState_ = XInputGetStateStub;
+#define XInputGetState XInputGetState_
+
+#define X_INPUT_SET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_VIBRATION *pVibration)
+typedef X_INPUT_SET_STATE(x_input_set_state);
+X_INPUT_SET_STATE(XInputSetStateStub) {
+    return ERROR_DEVICE_NOT_CONNECTED;
+}
+x_input_set_state* XInputSetState_ = XInputSetStateStub;
+#define XInputSetState XInputSetState_
 
 struct win32_dimensions {
     int width;
@@ -17,11 +36,66 @@ struct win32_back_buffer {
     int height;
 };
 
+struct win32_xinput_gamepad {
+    bool32 buttonA;
+    bool32 buttonB;
+    bool32 buttonX;
+    bool32 buttonY;
+};
+
 global_variable bool IsRunning = false;
 global_variable win32_back_buffer globalBackBuffer;
 global_variable uint8_t globalRed = 0;
 global_variable uint8_t globalGreen = 85;
 global_variable uint8_t globalBlue = 160;
+
+internal void Win32InitXInput() {
+    HMODULE xInput = LoadLibraryExW(L"xinput1_4.dll", 0, 0);
+    if (!xInput) {
+        xInput = LoadLibraryExW(L"xinput1_3.dll", 0, 0);
+    }
+
+    if (!xInput) {
+        xInput = LoadLibraryExW(L"xinput9_1_0.dll", 0, 0);
+    }
+
+    if (xInput) {
+        XInputGetState = (x_input_get_state*)GetProcAddress(xInput, "XInputGetState");
+        XInputSetState = (x_input_set_state*)GetProcAddress(xInput, "XInputSetState");
+    }
+}
+
+internal XINPUT_STATE* Win32ReadUserXInput() {
+    DWORD dwResult;    
+    for (DWORD i=0; i< XUSER_MAX_COUNT; i++ ) {
+        XINPUT_STATE state;
+        ZeroMemory( &state, sizeof(XINPUT_STATE) );
+
+        // Simply get the state of the controller from XInput.
+        dwResult = XInputGetState( i, &state );
+
+        if( dwResult == ERROR_SUCCESS ) {
+            return &state;
+        }
+    }
+
+    return 0;
+}
+
+internal win32_xinput_gamepad Win32GetUserXInput() {
+    XINPUT_STATE* state = Win32ReadUserXInput();
+
+    win32_xinput_gamepad gamepad = {};
+
+    if (state) {
+        gamepad.buttonA = state->Gamepad.wButtons & XINPUT_GAMEPAD_A;
+        gamepad.buttonB = state->Gamepad.wButtons & XINPUT_GAMEPAD_B;
+        gamepad.buttonX = state->Gamepad.wButtons & XINPUT_GAMEPAD_X;
+        gamepad.buttonY = state->Gamepad.wButtons & XINPUT_GAMEPAD_Y;
+    }
+
+    return gamepad;
+}
 
 internal void Win32FillBackBuffer(uint8_t red, uint8_t green, uint8_t blue) {
     uint8_t* row = (uint8_t*)globalBackBuffer.memory;
@@ -125,6 +199,9 @@ int WinMain(
     HINSTANCE hPrevInstance,
     LPSTR     lpCmdLine,
     int       nShowCmd) {
+        
+        Win32InitXInput();
+
         WNDCLASSEXW winc = {};
         winc.cbSize = sizeof(WNDCLASSEXW);
         winc.style = CS_OWNDC|CS_HREDRAW|CS_VREDRAW;
@@ -152,6 +229,9 @@ int WinMain(
                 HDC dc = GetDC(window);
 
                 int offset = 0;
+                int redOffset = 0;
+                int greenOffset = 0;
+                int blueOffset = 0;
 
                 Win32RebuildBackBuffer(window, 1280, 720);
 
@@ -164,11 +244,25 @@ int WinMain(
                         TranslateMessage(&msg);
                         DispatchMessage(&msg);
                     }
-                    Win32FillBackBuffer((globalRed + offset), (globalGreen + offset), (globalBlue + offset));
+
+                    win32_xinput_gamepad gamepad = Win32GetUserXInput();
+
+                    if (gamepad.buttonA) {
+                        redOffset++;
+                    }
+                    if (gamepad.buttonB) {
+                        greenOffset++;
+                    }
+                    if (gamepad.buttonX) {
+                        blueOffset++;
+                    }
+                    if (gamepad.buttonY) {
+                        offset++;
+                    }
+
+                    Win32FillBackBuffer((globalRed + redOffset + offset), (globalGreen + greenOffset + offset), (globalBlue + blueOffset + offset));
                     win32_dimensions windowDim = Win32GetDimensions(window);
                     Win32DisplayBuffer(dc, windowDim.width, windowDim.height, globalBackBuffer);
-
-                    offset++;
                 }
             } else {
                 OutputDebugStringW(L"failed to create window\n");
