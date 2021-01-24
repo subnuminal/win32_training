@@ -65,8 +65,15 @@ internal void Win32InitXInput() {
     }
 }
 
-internal XINPUT_STATE* Win32ReadUserXInput() {
-    DWORD dwResult;    
+struct input_wrapper {
+    bool32 hasState;
+    XINPUT_STATE state;
+};
+
+internal input_wrapper Win32ReadUserXInput() {
+    DWORD dwResult;
+    input_wrapper iw = {};
+    iw.hasState = false;
     for (DWORD i=0; i< XUSER_MAX_COUNT; i++ ) {
         XINPUT_STATE state;
         ZeroMemory( &state, sizeof(XINPUT_STATE) );
@@ -75,19 +82,22 @@ internal XINPUT_STATE* Win32ReadUserXInput() {
         dwResult = XInputGetState( i, &state );
 
         if( dwResult == ERROR_SUCCESS ) {
-            return &state;
+            iw.hasState = true;
+            iw.state = state;
+            return iw;
         }
     }
 
-    return 0;
+    return iw;
 }
 
 internal win32_xinput_gamepad Win32GetUserXInput() {
-    XINPUT_STATE* state = Win32ReadUserXInput();
-
+    input_wrapper iw = Win32ReadUserXInput();
     win32_xinput_gamepad gamepad = {};
 
-    if (state) {
+    if (iw.hasState) {
+        XINPUT_STATE* state = &iw.state;
+
         gamepad.buttonA = state->Gamepad.wButtons & XINPUT_GAMEPAD_A;
         gamepad.buttonB = state->Gamepad.wButtons & XINPUT_GAMEPAD_B;
         gamepad.buttonX = state->Gamepad.wButtons & XINPUT_GAMEPAD_X;
