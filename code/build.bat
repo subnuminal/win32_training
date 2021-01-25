@@ -1,6 +1,6 @@
 @echo off
 
-mkdir ..\..\hmbuild
+IF NOT EXIST ..\..\hmbuild (mkdir ..\..\hmbuild)
 pushd ..\..\hmbuild
-cl -Zi ..\hmtrain\code\*.cpp User32.lib Gdi32.lib
+cl -Zi ..\hmtrain\code\*.cpp User32.lib Gdi32.lib Ole32.lib
 popd
